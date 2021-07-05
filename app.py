@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, abort
 import tensorflow as tf
 import numpy as np
 import json
@@ -27,19 +27,23 @@ app = Flask(__name__)
 @app.route('/', methods = ['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        data = request.get_json()
-        b64_img = io.BytesIO(base64.b64decode(data['bytes']))
-        img = imread(b64_img)
-        img = tf.keras.preprocessing.image.smart_resize(img, size=(224,224))
-        img = tf.keras.applications.mobilenet_v2.preprocess_input(img)
-        img = tf.expand_dims(img, axis= 0)
-        prediction = model.predict(img)
-        label_index = np.argmax(prediction)
-        predicted_cls = label_data[str(label_index)]
-        predicted_prob = prediction[0][label_index]
-        resp = {'result': predicted_cls, 'prob': str(predicted_prob)}
-
-    return resp
+        data = request.get_json(force = True)
+        img_bytes= data.get('bytes', None)
+        if img_bytes is None:
+            abort(400)
+        try:
+            b64_img = io.BytesIO(base64.b64decode(data['bytes']))
+            img = imread(b64_img)
+            img = tf.keras.preprocessing.image.smart_resize(img, size=(224,224))
+            img = tf.keras.applications.mobilenet_v2.preprocess_input(img)
+            img = tf.expand_dims(img, axis= 0)
+            prediction = model.predict(img)
+            label_index = np.argmax(prediction)
+            predicted_cls = label_data[str(label_index)]
+            predicted_prob = prediction[0][label_index]
+            return {'result': predicted_cls, 'prob': str(predicted_prob)}, 200
+        except Exception as e:
+            return {'error': e} , 400
 
 
 if __name__ == '__main__':
